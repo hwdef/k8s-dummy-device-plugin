@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/golang/glog"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -13,10 +11,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/golang/glog"
+
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 // DummyDeviceManager manages our dummy devices
@@ -35,10 +35,11 @@ func (ddm *DummyDeviceManager) Init() error {
 
 // discoverDummyResources populates device list
 // TODO: We currently only do this once at init, need to change it to do monitoring
-//		 and health state update
+//
+//	and health state update
 func (ddm *DummyDeviceManager) discoverDummyResources() error {
 	glog.Info("Discovering dummy devices")
-	raw, err := ioutil.ReadFile("./dummyResources.json")
+	raw, err := os.ReadFile("./dummyResources.json")
 	if err != nil {
 		fmt.Println(err.Error())
 		return err
@@ -201,7 +202,7 @@ func (ddm *DummyDeviceManager) Allocate(ctx context.Context, reqs *pluginapi.All
 	return &responses, nil
 }
 
-// GetDevicePluginOptions returns options to be communicated with Device Manager 
+// GetDevicePluginOptions returns options to be communicated with Device Manager
 func (ddm *DummyDeviceManager) GetDevicePluginOptions(context.Context, *pluginapi.Empty) (*pluginapi.DevicePluginOptions, error) {
 	return &pluginapi.DevicePluginOptions{}, nil
 }
@@ -213,6 +214,10 @@ func (ddm *DummyDeviceManager) PreStartContainer(context.Context, *pluginapi.Pre
 	return &pluginapi.PreStartContainerResponse{}, nil
 }
 
+func (ddm *DummyDeviceManager) GetPreferredAllocation(context.Context, *pluginapi.PreferredAllocationRequest) (*pluginapi.PreferredAllocationResponse, error) {
+	return &pluginapi.PreferredAllocationResponse{}, nil
+}
+
 func main() {
 	flag.Parse()
 	flag.Lookup("logtostderr").Value.Set("true")
@@ -220,8 +225,8 @@ func main() {
 	// Create new dummy device manager
 	ddm := &DummyDeviceManager{
 		devices: make(map[string]*pluginapi.Device),
-		socket: pluginapi.DevicePluginPath + "dummy.sock",
-		health: make(chan *pluginapi.Device),
+		socket:  pluginapi.DevicePluginPath + "dummy.sock",
+		health:  make(chan *pluginapi.Device),
 	}
 
 	// Populate device list
@@ -248,10 +253,7 @@ func main() {
 	}
 	fmt.Printf("device-plugin registered\n")
 
-	select {
-	case s := <-sigs:
-		glog.Infof("Received signal \"%v\", shutting down.", s)
-		ddm.Stop()
-		return
-	}
+	s := <-sigs
+	glog.Infof("Received signal \"%v\", shutting down.", s)
+	ddm.Stop()
 }
